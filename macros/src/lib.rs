@@ -1,14 +1,6 @@
-use proc_macro::{token_stream, Group, Ident, TokenStream, TokenTree};
+use proc_macro::{Group, Ident, Punct, Span, Spacing, TokenStream, TokenTree};
 
 //use crate::helpers::expect_punct;
-
-fn expect_ident(it: &mut token_stream::IntoIter) -> Ident {
-    if let Some(TokenTree::Ident(ident)) = it.next() {
-        ident
-    } else {
-        panic!("Expected Ident")
-    }
-}
 
 fn expect_group(it: &mut impl Iterator<Item = TokenTree>) -> Group {
     if let Some(TokenTree::Group(group)) = it.next() {
@@ -220,42 +212,44 @@ pub fn versions(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let mut it = item.into_iter();
-    let mut head: Vec<TokenTree> = Vec::new();
     let mut out = TokenStream::new();
-    let mut name = None;
+    let mut body: Vec<TokenTree> = Vec::new();
     let mut is_struct = false;
 
     while let Some(token) = it.next() {
         match token {
             TokenTree::Punct(punct) if punct.to_string() == "#" => {
-                head.push(TokenTree::Punct(punct));
-                head.push(it.next().unwrap());
+                body.push(TokenTree::Punct(punct));
+                body.push(it.next().unwrap());
             }
             TokenTree::Ident(ident) if ident.to_string() == "struct" => {
-                head.push(TokenTree::Ident(ident));
-                name = Some(expect_ident(&mut it));
+                body.push(TokenTree::Ident(ident));
+                body.push(it.next().unwrap());
+                // This isn't valid syntax in a struct definition, so add it for the user
+                body.push(TokenTree::Punct(Punct::new(':', Spacing::Joint)));
+                body.push(TokenTree::Punct(Punct::new(':', Spacing::Alone)));
+                body.push(TokenTree::Ident(Ident::new("ver", Span::call_site())));
                 is_struct = true;
                 break;
             }
             TokenTree::Ident(ident) if ident.to_string() == "impl" => {
-                head.push(TokenTree::Ident(ident));
-                head.push(it.next().unwrap());
-                head.push(it.next().unwrap());
-                name = Some(expect_ident(&mut it));
+                body.push(TokenTree::Ident(ident));
+                break;
+            }
+            TokenTree::Ident(ident) if ident.to_string() == "fn" => {
+                body.push(TokenTree::Ident(ident));
                 break;
             }
             _ => {
-                head.push(token);
+                body.push(token);
             }
         }
     }
 
-    let name = name.unwrap();
-    let body: Vec<_> = it.collect();
+    body.extend(it);
 
     for ver in config.versions {
         let tag = ver.join("");
-        let versioned_name = name.to_string() + &tag;
         let mut ver_num = Vec::<usize>::new();
         for (i, comp) in ver.iter().enumerate() {
             let idx = config.enums[i]
@@ -264,9 +258,6 @@ pub fn versions(attr: TokenStream, item: TokenStream) -> TokenStream {
                 .unwrap();
             ver_num.push(idx);
         }
-        let ident = Ident::new(versioned_name.as_str(), name.span());
-        out.extend(head.clone());
-        out.extend(std::iter::once(TokenTree::Ident(ident)));
         out.extend(filter_versions(
             config,
             &tag,
