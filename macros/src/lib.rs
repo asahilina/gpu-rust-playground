@@ -1,10 +1,10 @@
-use proc_macro::{Group, Ident, Punct, Span, Spacing, TokenStream, TokenTree};
+use proc_macro::{Group, Ident, Punct, Spacing, Span, TokenStream, TokenTree};
 
 //use crate::helpers::expect_punct;
 
 fn expect_group(it: &mut impl Iterator<Item = TokenTree>) -> Group {
     if let Some(TokenTree::Group(group)) = it.next() {
-        group.clone()
+        group
     } else {
         panic!("Expected Group")
     }
@@ -19,12 +19,11 @@ fn expect_punct(it: &mut impl Iterator<Item = TokenTree>) -> String {
 }
 
 fn drop_until_punct(it: &mut impl Iterator<Item = TokenTree>, delimiter: &str) {
-    while let Some(token) = it.next() {
-        match &token {
-            TokenTree::Punct(punct) if punct.to_string() == delimiter => {
+    for token in it.by_ref() {
+        if let TokenTree::Punct(punct) = token {
+            if punct.to_string() == delimiter {
                 break;
             }
-            _ => (),
         }
     }
 }
@@ -56,28 +55,27 @@ fn check_version(
     let val: bool = match &first {
         TokenTree::Group(group) => check_version(config, ver, &mut group.stream().into_iter()),
         TokenTree::Ident(ident) => {
-            let key = match config.fields.iter().position(|&r| r == ident.to_string()) {
-                Some(s) => s,
-                None => panic!("Unknown field {}", ident.to_string()),
-            };
+            let key = config
+                .fields
+                .iter()
+                .position(|&r| r == ident.to_string())
+                .unwrap_or_else(|| panic!("Unknown field {}", ident));
             let mut operator = expect_punct(it);
             let mut rhs_token = it.next().unwrap();
-            match &rhs_token {
-                TokenTree::Punct(punct) => {
-                    operator = operator + &punct.to_string();
-                    rhs_token = it.next().unwrap();
-                }
-                _ => (),
+            if let TokenTree::Punct(punct) = &rhs_token {
+                operator = operator + &punct.to_string();
+                rhs_token = it.next().unwrap();
             }
-            let rhs_name = match &rhs_token {
-                TokenTree::Ident(ident) => ident.to_string(),
-                _ => panic!("Unexpected token {}", ident.to_string()),
+            let rhs_name = if let TokenTree::Ident(ident) = &rhs_token {
+                ident.to_string()
+            } else {
+                panic!("Unexpected token {}", ident)
             };
 
-            let rhs = match config.enums[key].iter().position(|&r| r == rhs_name) {
-                Some(s) => s,
-                None => panic!("Unknown field {}", ident.to_string()),
-            };
+            let rhs = config.enums[key]
+                .iter()
+                .position(|&r| r == rhs_name)
+                .unwrap_or_else(|| panic!("Unknown field {}", ident));
             let lhs = ver[key];
 
             match operator.as_str() {
@@ -99,7 +97,7 @@ fn check_version(
         Some(TokenTree::Punct(punct)) => {
             let right = expect_punct(it);
             if right != punct.to_string() {
-                panic!("Unexpected op {}{}", punct.to_string(), right);
+                panic!("Unexpected op {}{}", punct, right);
             }
             match punct.as_char() {
                 '&' => val && check_version(config, ver, it),
@@ -208,7 +206,7 @@ fn filter_versions(
 pub fn versions(attr: TokenStream, item: TokenStream) -> TokenStream {
     let config = match attr.to_string().as_str() {
         "AGX" => &AGX_VERSIONS,
-        _ => panic!("Unknown version group {}", attr.to_string())
+        _ => panic!("Unknown version group {}", attr),
     };
 
     let mut it = item.into_iter();
@@ -252,10 +250,7 @@ pub fn versions(attr: TokenStream, item: TokenStream) -> TokenStream {
         let tag = ver.join("");
         let mut ver_num = Vec::<usize>::new();
         for (i, comp) in ver.iter().enumerate() {
-            let idx = config.enums[i]
-                .iter()
-                .position(|&r| r == comp.to_string())
-                .unwrap();
+            let idx = config.enums[i].iter().position(|&r| r == *comp).unwrap();
             ver_num.push(idx);
         }
         out.extend(filter_versions(
