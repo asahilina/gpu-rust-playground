@@ -63,7 +63,7 @@ fn check_version(
             let mut operator = expect_punct(it);
             let mut rhs_token = it.next().unwrap();
             if let TokenTree::Punct(punct) = &rhs_token {
-                operator = operator + &punct.to_string();
+                operator.extend(std::iter::once(punct.as_char()));
                 rhs_token = it.next().unwrap();
             }
             let rhs_name = if let TokenTree::Ident(ident) = &rhs_token {
