@@ -21,7 +21,7 @@ fn expect_punct(it: &mut impl Iterator<Item = TokenTree>) -> String {
 fn drop_until_punct(it: &mut impl Iterator<Item = TokenTree>, delimiter: &str) {
     for token in it.by_ref() {
         if let TokenTree::Punct(punct) = token {
-            if punct.to_string() == delimiter {
+            if delimiter.contains(&punct.to_string()) {
                 break;
             }
         }
@@ -80,6 +80,7 @@ fn check_version(
 
             match operator.as_str() {
                 "==" => lhs == rhs,
+                "!=" => lhs != rhs,
                 ">" => lhs > rhs,
                 ">=" => lhs >= rhs,
                 "<" => lhs < rhs,
@@ -136,7 +137,7 @@ fn filter_versions(
                             match &first {
                                 TokenTree::Group(_) => (),
                                 _ => {
-                                    drop_until_punct(&mut it, ";");
+                                    drop_until_punct(&mut it, ",;");
                                 }
                             }
                         }
