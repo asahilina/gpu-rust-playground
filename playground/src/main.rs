@@ -129,14 +129,14 @@ impl<T: GPUStruct + Debug> Debug for GPUObject<T> {
 }
 
 struct GPUArray<T: Copy> {
-    raw: Box<Vec<T>>,
+    raw: Vec<T>,
     gpu_ptr: NonZeroU64,
 }
 
 impl<T: Copy> GPUArray<T> {
     fn new(data: Vec<T>) -> GPUArray<T> {
         GPUArray::<T> {
-            raw: Box::new(data),
+            raw: data,
             gpu_ptr: NonZeroU64::new(1).unwrap(),
         }
     }
@@ -147,7 +147,7 @@ impl<T: Copy> GPUArray<T> {
 
     #[allow(dead_code)]
     fn len(&self) -> usize {
-        (*self.raw).len()
+        self.raw.len()
     }
 
     #[allow(dead_code)]
