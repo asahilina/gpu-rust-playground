@@ -42,6 +42,7 @@ impl<T> GPUWeakPointer<T> {
 }
 
 #[repr(transparent)]
+#[allow(dead_code)]
 struct GPURawPointer(NonZeroU64);
 
 #[macro_export]
@@ -118,7 +119,7 @@ impl<T: GPUStruct> GPUObject<T> {
     }
 }
 
-impl<'a, T: GPUStruct + Debug> Debug for GPUObject<T> {
+impl<T: GPUStruct + Debug> Debug for GPUObject<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         f.debug_struct(core::any::type_name::<T>())
             .field("raw", &format_args!("{:#X?}", &self.raw))
@@ -128,14 +129,14 @@ impl<'a, T: GPUStruct + Debug> Debug for GPUObject<T> {
 }
 
 struct GPUArray<T: Copy> {
-    raw: Box<Vec<T>>,
+    raw: Vec<T>,
     gpu_ptr: NonZeroU64,
 }
 
 impl<T: Copy> GPUArray<T> {
     fn new(data: Vec<T>) -> GPUArray<T> {
         GPUArray::<T> {
-            raw: Box::new(data),
+            raw: data,
             gpu_ptr: NonZeroU64::new(1).unwrap(),
         }
     }
@@ -144,16 +145,19 @@ impl<T: Copy> GPUArray<T> {
         GPUPointer(self.gpu_ptr, PhantomData)
     }
 
+    #[allow(dead_code)]
     fn len(&self) -> usize {
-        (*self.raw).len()
+        self.raw.len()
     }
 
+    #[allow(dead_code)]
     fn as_slice(&self) -> &[T] {
-        &*self.raw
+        &self.raw
     }
 
+    #[allow(dead_code)]
     fn as_mut_slice(&mut self) -> &mut [T] {
-        &mut *self.raw
+        &mut self.raw
     }
 }
 
@@ -163,7 +167,7 @@ impl<T: GPUStruct> Drop for GPUObject<T> {
     }
 }
 
-impl<'a, T: Copy + Debug> Debug for GPUArray<T> {
+impl<T: Copy + Debug> Debug for GPUArray<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         f.debug_struct(core::any::type_name::<T>())
             .field("array", &format_args!("{:#X?}", &self.raw))
@@ -200,6 +204,7 @@ struct RawBufferManagerInfo<'a> {
 #[versions(AGX)]
 #[derive(Debug)]
 struct BufferManagerInfo {
+    #[allow(dead_code)]
     block_control: GPUObject<BufferManagerBlockControl>,
 }
 
@@ -220,7 +225,9 @@ struct RawTAJob<'a> {
 #[versions(AGX)]
 #[derive(Debug)]
 struct TAJob {
+    #[allow(dead_code)]
     buffer_mgr: Arc<GPUObject<BufferManagerInfo::ver>>,
+    #[allow(dead_code)]
     micro_sequence: GPUMicroSequence,
 }
 
@@ -266,28 +273,30 @@ impl SomeOp {
 
 impl GPUMSOp for SomeOp {}
 
+#[allow(dead_code)]
 #[versions(AGX)]
 struct GPUDriver {}
 
+#[allow(dead_code)]
 #[versions(AGX)]
 impl GPUDriver::ver {
     fn run() {
-        let mut ctl = GPUObject::new(BufferManagerBlockControl {}, |inner| {
+        let ctl = GPUObject::new(BufferManagerBlockControl {}, |_inner| {
             RawBufferManagerBlockControl {
                 total: AtomicU32::new(0),
                 ..Default::default()
             }
         });
 
-        let mut ctl2 =
-            GPUObject::<BufferManagerBlockControl>::new(BufferManagerBlockControl {}, |inner| {
+        let ctl2 =
+            GPUObject::<BufferManagerBlockControl>::new(BufferManagerBlockControl {}, |_inner| {
                 RawBufferManagerBlockControl {
                     total: AtomicU32::new(0),
                     ..Default::default()
                 }
             });
 
-        dbg!(ctl2);
+        dbg!(&ctl2);
 
         let mut mgr = GPUObject::<BufferManagerInfo::ver>::new(
             BufferManagerInfo::ver { block_control: ctl },
@@ -305,14 +314,14 @@ impl GPUDriver::ver {
 
         mgr.with_mut(|raw, inner| {
             raw.gpu_counter = 2;
-            inner.block_control.with(|raw, inner| {
+            inner.block_control.with(|raw, _inner| {
                 raw.total.fetch_add(1, Ordering::Relaxed);
             });
         });
 
         let arc = Arc::new(mgr);
 
-        let mut ta = GPUObject::<TAJob::ver>::new_prealloc(
+        let ta = GPUObject::<TAJob::ver>::new_prealloc(
             |p| {
                 let mut ms = GPUMicroSequenceBuilder::new();
                 ms.add(SomeOp {
@@ -331,8 +340,8 @@ impl GPUDriver::ver {
             },
         );
 
-        arc.with(|raw, inner| {
-            inner.block_control.with(|raw, inner| {
+        arc.with(|_raw, inner| {
+            inner.block_control.with(|raw, _inner| {
                 raw.total.fetch_add(1, Ordering::Relaxed);
             });
         });
